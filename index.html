@@ -534,22 +534,23 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
     </div>
     <div class="stats">
       <div class="stat rv"><b data-count="5000">0</b><span>PubMed abstracts</span></div>
-      <div class="stat rv d1"><b data-count="13733">0</b><span>indexed passages</span></div>
+      <div class="stat rv d1"><b data-count="14658">0</b><span>indexed passages</span></div>
       <div class="stat rv d2"><b data-count="59">0</b><span>evaluation questions</span></div>
-      <div class="stat rv d3"><b data-count="146">0</b><span>automated tests</span></div>
+      <div class="stat rv d3"><b data-count="226">0</b><span>automated tests</span></div>
     </div>
 
     <div class="pipe rv" aria-label="How DiabEvidence answers">
-      <div class="pc"><span>1</span><h4>Scope check</h4><p>A small model reads only the question: in scope, adjacent, or unrelated?</p></div>
-      <div class="pc"><span>2</span><h4>Retrieval</h4><p>Local embeddings search 13,733 passages in Pinecone.</p></div>
+      <div class="pc"><span>1</span><h4>Query step</h4><p>A small model rewrites the question into research vocabulary and flags requests for a personal dose.</p></div>
+      <div class="pc"><span>2</span><h4>Hybrid search</h4><p>Embeddings plus keyword search over 14,658 passages; the judge reads the six full abstracts they point to.</p></div>
       <div class="pc"><span>3</span><h4>Evidence audit</h4><p>Splits the question into claims; is each passage direct, partial, or absent evidence?</p></div>
-      <div class="pc"><span>4</span><h4>Routing</h4><p>Scope and evidence together decide: answer, caveat, or which refusal.</p></div>
-      <div class="pc"><span>5</span><h4>Grounded answer</h4><p>One sentence at a time, each tied to its passages.</p></div>
+      <div class="pc"><span>4</span><h4>Grounded answer</h4><p>Plain English for patients or full study detail for clinicians, every sentence tied to its passages.</p></div>
+      <div class="pc"><span>5</span><h4>Checked before shown</h4><p>Uncited claims removed, a second model verifies each sentence, and nothing appears until it passes.</p></div>
     </div>
 
     <div class="states rv">
-      <div class="kicker">The routing table</div>
-      <h3>Two verdicts decide<br>what you see.</h3>
+      <div class="kicker">The v2 routing table</div>
+      <h3>Two verdicts decided<br>what you saw.</h3>
+      <p class="sub">The two-stage design below ran until v3, which removed the scope check: the evidence audit alone now decides, and adjacent questions are answered only when the library holds direct evidence.</p>
       <div class="mx">
         <div class="mxc">
           <div class="mxl">Stage A &middot; Scope</div>
@@ -563,10 +564,10 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
 
     <div class="eng rv">
       <div class="et"><h4>Topical similarity is not evidence</h4><p>A passage about the same drug or nutrient doesn't count unless it actually states the claim. One core claim per question decides the verdict.</p></div>
-      <div class="et"><h4>A scope charter, not code</h4><p>The scope rules live in one editable file the judge reads at startup, so changing what's in scope never needs a code change.</p></div>
-      <div class="et"><h4>Safety banners</h4><p>Flags when evidence comes from a different population, when a comparison is stitched from separate studies, and when someone asks for a personal dose.</p></div>
+      <div class="et"><h4>Nothing shown until checked</h4><p>Code removes any factual sentence without a citation and refuses answers citing nothing it retrieved; a verifier model then drops unsupported sentences. Status can only go down.</p></div>
+      <div class="et"><h4>Safety by design</h4><p>Flags population mismatches and comparisons stitched from separate studies. Personal dose questions go to a clinician, and patient answers are scanned for medicine names the person didn't mention, which are replaced.</p></div>
       <div class="et"><h4>Fails closed</h4><p>On any error, it refuses rather than answers. A broken judge can never let an unchecked answer through.</p></div>
-      <div class="et"><h4>Two evidence tiers</h4><p>Research questions search the study abstracts; definition questions search 35 ADA and NIDDK patient-education passages, which can never support a research claim.</p></div>
+      <div class="et"><h4>Two evidence tiers</h4><p>Every question searches both the study abstracts and 13 ADA, NIDDK and CDC patient-education pages, which can explain a term but never support a research claim.</p></div>
       <div class="et"><h4>Nothing hidden</h4><p>Direct Anthropic and Pinecone calls with no LangChain. The page streams the answer with the evidence and the judges' reasoning beside it.</p></div>
     </div>
 
@@ -583,7 +584,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
         </div>
         <div class="qcard" id="qcard" aria-live="polite"></div>
       </div>
-      <div class="tfacts rv"><div><b>24</b>should be answered</div><div><b>17</b>diabetes-adjacent, should be declined</div><div><b>2</b>unrelated, should be declined</div></div>
+      <div class="tfacts rv"><div><b>24</b>should be answered</div><div><b>17</b>diabetes-adjacent: declined in v2, answered in v3 only with direct evidence</div><div><b>2</b>unrelated, should be declined</div></div>
     </div>
 
     <div class="rlog" id="finding">
@@ -621,14 +622,26 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
           <p>The first two-stage run sent 7 of 24 in-scope questions to "adjacent" because they mentioned exercise, insulin, or medication. "Do GLP-1 drugs cause loss of lean body mass?" was filed as medication, though lean mass is body composition. I read the judge's reason for every refusal and rewrote the rules: name the outcome first, map it to an area, and never let a word like "insulin" decide on its own.</p>
           <div class="causes"><span>7 misroutes → 1</span><span>Outcome before intervention</span><span>When unsure, in scope: the evidence check still blocks</span></div>
         </li>
+        <li class="rv">
+          <div class="ld">v3: let the evidence decide</div>
+          <h4>Dropping the scope judge.</h4>
+          <p>Even with better rules, the scope check was the bottleneck: valid questions were refused before anyone looked at the evidence, and well-supported adjacent ones never got an answer. v3 removes it. A query step rewrites the question, keyword search joins embedding search, the judge reads full abstracts instead of fragments, and an embedder bug that had cut 40% of passages off at 128 tokens is fixed.</p>
+          <div class="causes"><span>In-scope answered: 14 → 17 of 24</span><span>Fully supported: 47% → 56%</span><span>Unrelated still declined</span></div>
+        </li>
+        <li class="rv">
+          <div class="ld">v3: nothing shown until checked</div>
+          <h4>Checks after the answer is written.</h4>
+          <p>Fully answered questions were almost always right; partial answers were where the errors lived. So every answer is now held back until it passes: uncited claims are removed, answers that cite nothing they retrieved are refused, and a second model checks each sentence against its source. One partial answer that said nothing useful is now refused instead of shown.</p>
+          <div class="causes"><span>Fully supported: 56% → 67%</span><span>Answered questions: 9 of 9 supported</span><span>Status can only go down</span></div>
+        </li>
       </ol>
     </div>
 
     <div class="res" id="results">
       <div class="rv">
         <div class="kicker">Results</div>
-        <h3>Fewer answers. More honest ones.</h3>
-        <p class="sub">Every design was run once on the same 43 frozen questions; the final design also ran on 16 new ones. Whiskers show 95% Wilson intervals.</p>
+        <h3>Honest answers, measured.</h3>
+        <p class="sub">Every design was run once on the same 43 frozen questions; the v2 design also ran on 16 new ones, and v3 has not been run on them yet. Whiskers show 95% Wilson intervals.</p>
       </div>
       <div class="pred rv"><div class="pn">14 / 24</div><div><b>Predicted before the run, committed to the repository: about 14 of 24 in-scope questions answered.</b><span>Result: exactly 14 of 24.</span></div></div>
       <div class="panel rv">
@@ -636,14 +649,14 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
         <div id="rview"></div>
       </div>
       <div class="rig rv">
-        <span>Questions frozen before any run</span><span>Predictions committed first</span><span>Each evaluation run once</span><span>58 automated consistency checks</span><span>Independent grader model</span><span>Every answer exported for human grading</span>
+        <span>Questions frozen before any run</span><span>Predictions committed first</span><span>Each evaluation run once</span><span>58 automated consistency checks</span><span>226 automated tests</span><span>Independent grader model</span><span>Every answer exported for human grading</span>
       </div>
       <div class="lim rv">
         <div>
           <h4>What still doesn't work</h4>
           <ul>
-            <li><b>Partial-evidence answers overreach.</b> The safety-relevant failure, and the next thing to fix.</li>
-            <li>One scope blind spot: medication questions whose outcome isn't blood sugar, like metformin and vitamin B12.</li>
+            <li><b>Partial-evidence answers still overreach.</b> In v3, 7 of 15 partial answers are fully supported, against 9 of 9 full answers. The safety-relevant failure, and the next thing to fix.</li>
+            <li>Slow: about 31–34 seconds per answer, two-thirds of it spent writing.</li>
             <li>The evidence judge doesn't always apply the population rule.</li>
             <li>Library gaps: the dawn phenomenon, grapefruit with diabetes drugs, and nuts have no direct evidence in the 5,000 abstracts.</li>
           </ul>
@@ -654,11 +667,12 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
             <li>Small samples with wide intervals; most differences between designs are not statistically significant.</li>
             <li>Development numbers are optimistic: prompts were revised after studying failures on those same questions.</li>
             <li>The held-out set is semi-independent: it was drafted with the AI assistant used for implementation.</li>
-            <li>Faithfulness is graded by a model; human grading of every answer is still to do.</li>
+            <li>Faithfulness is graded by a model, and 17 of the final 24 grades were done by hand after the API credit ran out, so the last row mixes graders.</li>
+            <li>v3 has not yet been run on the held-out questions.</li>
           </ul>
         </div>
       </div>
-      <p class="ack rv">I designed DiabEvidence and made its key decisions: the scope, the two-stage judge, the routing table, the outcome-based scope rules and revised prompts, the evaluation protocol, and the interpretation of results. I used Claude Code to implement much of the code from my specifications and to run the evaluations. Models: Claude Haiku 4.5 for the judges, Claude Sonnet 5 for answers and grading. A research prototype, not medical advice.</p>
+      <p class="ack rv">I designed DiabEvidence and made its key decisions: the scope, the two-stage judge, the routing table, the outcome-based scope rules and revised prompts, the v3 redesign (dropping the scope judge, hybrid search, patient and clinician modes, and the checks before an answer is shown), the evaluation protocol, and the interpretation of results. I used Claude Code to implement much of the code from my specifications and to run the evaluations. Models: Claude Haiku 4.5 for the query step, the evidence judge and the sentence verifier; Claude Sonnet 5 for answers and grading. A research prototype, not medical advice.</p>
     </div>
   </div>
 </section>
@@ -706,7 +720,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
         <div class="txt">
           <div class="badge live">Live</div>
           <h3>DiabEvidence</h3>
-          <p>Answers type 2 diabetes questions only when the literature supports them. A two-stage judge checks scope first, then audits the evidence claim by claim; rewriting its scope rules cut routing mistakes from 7 to 1, tested against a prediction committed in advance and a held-out set.</p>
+          <p>Answers diabetes questions only when the literature supports them. An evidence judge audits each claim, hybrid search reads full abstracts, and every answer is checked sentence by sentence before it is shown: 9 of 9 fully answered questions were fully supported in development testing.</p>
           <div class="stack"><span>Python</span><span>FastAPI</span><span>Pinecone</span><span>all-MiniLM-L6-v2</span><span>Claude Haiku 4.5 + Sonnet 5</span><span>Render</span></div>
           <div class="foot"><a class="pill" href="https://diabevidence.onrender.com" target="_blank" rel="noopener">Try it</a><a class="more" href="https://github.com/manoj2883/Daibevidence" target="_blank" rel="noopener">GitHub</a></div>
         </div>
@@ -838,7 +852,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
   /* Self-citing headline */
   var SRC=[
     {lab:'Experience',txt:'GenAI Engineer at Blooming Clouds since December 2025. Before that, Data Engineer at QuartetAI and Program Analyst at Cognizant.',href:'#journey',link:'See the journey'},
-    {lab:'DiabEvidence',txt:'A RAG pipeline over 5,000 PubMed abstracts: ingestion, population tagging, retrieval, a two-stage judge, and generation that ties every sentence to its passages.',href:'https://diabevidence.onrender.com',link:'Try it live',ext:true},
+    {lab:'DiabEvidence',txt:'A RAG pipeline over 5,000 PubMed abstracts: ingestion, population tagging, hybrid retrieval, an evidence judge, generation that ties every sentence to its passages, and checks before anything is shown.',href:'https://diabevidence.onrender.com',link:'Try it live',ext:true},
     {lab:'Health AI',txt:'Built for type 2 diabetes and designed for other diseases: Alzheimer\'s, cancer, heart and kidney disease, ADHD, and ACEs.',href:'#diseases',link:'Explore the diseases'},
     {lab:'Result',txt:'Adjacent questions answered fell from 47% with a similarity cutoff to under 6% with the two-stage judge, and rewriting its scope rules cut routing mistakes from 7 to 1.',href:'#results',link:'See the results'}
   ];
@@ -885,7 +899,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
 var EVALQ=[["diet", "Does adherence to a Mediterranean-style diet reduce the risk of developing type 2 diabetes in high-risk adults?"], ["diet", "How does dietary fiber intake affect the risk of developing type 2 diabetes?"], ["diet", "What is the evidence for low-carbohydrate diets versus low-fat diets in managing type 2 diabetes?"], ["diet", "Is there evidence that plant-based diets improve glycemic control in people with type 2 diabetes?"], ["diet", "Does time-restricted eating (intermittent fasting) improve markers of glycemic control?"], ["diet", "What role does the DASH diet play in glycemic and blood pressure outcomes for people with diabetes?"], ["gly", "What HbA1c target is generally recommended for most nonpregnant adults with type 2 diabetes?"], ["gly", "Does continuous glucose monitoring (CGM) improve glycemic control compared with self-monitoring of blood glucose?"], ["gly", "What is the 'dawn phenomenon' and how does it affect glycemic control?"], ["gly", "How does postprandial exercise timing affect blood glucose control in type 2 diabetes?"], ["gly", "What is glycemic variability and why is it clinically relevant?"], ["gly", "Do DPP-4 inhibitors provide clinically meaningful HbA1c reduction as monotherapy in type 2 diabetes?"], ["body", "Does bariatric surgery lead to remission of type 2 diabetes?"], ["body", "Can intensive low-calorie diet interventions induce remission of type 2 diabetes?"], ["body", "How does visceral adiposity relate to insulin resistance compared with subcutaneous fat?"], ["body", "Do GLP-1 receptor agonists cause disproportionate loss of lean body mass during weight loss?"], ["body", "What is sarcopenic obesity and why is it a concern in older adults with type 2 diabetes?"], ["body", "Is waist circumference a better predictor of metabolic risk than BMI in people with diabetes?"], ["med", "Does long-term metformin use affect vitamin B12 status?"], ["med", "What is the interaction risk between alcohol intake and sulfonylurea medications?"], ["med", "How does a high-fiber meal affect the absorption of oral hypoglycemic agents?"], ["med", "Is there a known interaction between ketogenic/very-low-carbohydrate diets and SGLT2 inhibitors?"], ["med", "Does dietary protein intake need to be specifically adjusted when initiating insulin therapy?"], ["med", "Can grapefruit or grapefruit juice affect the metabolism of certain oral diabetes medications?"], ["adj", "What eye complications require laser treatment in diabetic retinopathy?"], ["adj", "How often should diabetic retinopathy screening (dilated eye exam) be performed?"], ["adj", "How does an insulin pump's tubing mechanism deliver basal insulin?"], ["adj", "How does a continuous glucose monitor (CGM) sensor calibrate against fingerstick blood glucose readings?"], ["adj", "How long can a continuous glucose monitor sensor be worn before it needs to be replaced?"], ["adj", "What is the difference in cartridge or reservoir mechanics between major insulin pump brands?"], ["adj", "What are the standard treatments for painful diabetic peripheral neuropathy?"], ["adj", "What diagnostic tests are used to confirm diabetic peripheral neuropathy?"], ["adj", "What wound care protocol is typically used for treating a diabetic foot ulcer?"], ["adj", "What type of footwear is recommended to prevent diabetic foot complications?"], ["adj", "How is peripheral arterial disease assessed during a diabetic foot exam?"], ["adj", "What are the diagnostic criteria for diabetic ketoacidosis?"], ["adj", "How is diabetic ketoacidosis typically managed in the emergency department?"], ["adj", "What blood or urine ketone level indicates diabetic ketoacidosis?"], ["adj", "What are the typical driver's-license medical-review rules for people with diabetes?"], ["adj", "Does health insurance typically cover the cost of an insulin pump?"], ["adj", "What disability benefits are available to people with type 1 diabetes?"], ["unr", "What is the capital of Australia?"], ["unr", "How do I refinance a car loan?"]];
   (function(){
     var C={diet:['Diet and nutrition',1],gly:['Glycemic control',1],body:['Body composition and weight',1],med:['Diet–medication interaction',1],adj:['Diabetes-adjacent, outside the corpus',0],unr:['Completely unrelated',0]};
-    var NOTE={1:'In scope. It should answer from the research, with a citation on every sentence.',0:'A trap. The topic sounds close to diabetes, but the corpus does not cover it, so the right behaviour is to decline instead of guessing.'};
+    var NOTE={1:'In scope. It should answer from the research, with a citation on every sentence.',0:'A trap. The topic sounds close to diabetes but sits outside the four core areas. v2 declined it; v3 answers only if the library holds direct evidence for the exact claim, and says what it doesn\'t cover.'};
     NOTE.u='Completely off topic. The right behaviour is to decline.';
     var wf=document.getElementById('waffle'), cats=document.getElementById('cats'), qc=document.getElementById('qcard'), sqs=[];
     EVALQ.forEach(function(q,i){ var b=document.createElement('button'); b.type='button'; b.className='sq c-'+q[0]; b.setAttribute('aria-label','Question '+(i+1)); b.addEventListener('click',function(){ showQ(i); }); b.addEventListener('mouseenter',function(){ if(matchMedia('(hover:hover)').matches) showQ(i); }); wf.appendChild(b); sqs.push(b); });
@@ -932,13 +946,16 @@ var EVALQ=[["diet", "Does adherence to a Mediterranean-style diet reduce the ris
       {n:'Yes/no LLM judge',s:'first fix',i:[54.2,35.1,72.1],a:[29.4,13.3,53.1]},
       {n:'Two-stage, original prompts',s:'development',i:[41.7,24.5,61.2],a:[0,0,18.4]},
       {n:'Two-stage, revised prompts',s:'development',i:[58.3,38.8,75.5],a:[5.9,1.0,27.0]},
-      {n:'Two-stage, revised prompts',s:'held-out',i:[37.5,13.7,69.4],a:[0,0,43.5]}
+      {n:'Two-stage, revised prompts',s:'held-out',i:[37.5,13.7,69.4],a:[0,0,43.5]},
+      {n:'v3: evidence judge only',s:'development',i:[70.8,50.8,85.1],a:[47.1,26.2,69.0]}
     ];
     var F=[
       {n:'Yes/no LLM judge',s:'13 answered',v:[7,0,0],x:6},
       {n:'Two-stage, original',s:'10 answered',v:[6,3,1]},
       {n:'Two-stage, revised (dev)',s:'14 answered',v:[6,5,3]},
-      {n:'Two-stage, revised (held-out)',s:'3 answered',v:[1,1,1]}
+      {n:'Two-stage, revised (held-out)',s:'3 answered',v:[1,1,1]},
+      {n:'v3, full pipeline (dev)',s:'25 answered',v:[14,8,3]},
+      {n:'v3 + checks + verifier (dev)',s:'24 answered*',v:[16,7,1]}
     ];
     var tabs=['Answer rates','Faithfulness','Scope routing'], tb=document.getElementById('rtab'), v=document.getElementById('rview'), cur=-1, seen=false;
     tabs.forEach(function(t,i){ var x=document.createElement('button'); x.type='button'; x.textContent=t; x.addEventListener('click',function(){ show(i); }); tb.appendChild(x); });
@@ -946,18 +963,18 @@ var EVALQ=[["diet", "Does adherence to a Mediterranean-style diet reduce the ris
     function show(i){
       cur=i; [].forEach.call(tb.children,function(x,k){ x.classList.toggle('on',k===i); });
       if(i===0){
-        v.innerHTML='<div class="legend"><span><i style="background:linear-gradient(90deg,#0A84FF,#9B6BFF)"></i>In-scope questions answered</span><span><i style="background:#FF9F0A"></i>Adjacent questions answered (lower is better)</span><span><i style="background:#3A3A3C;height:4px;vertical-align:3px"></i>95% interval</span></div>'+
+        v.innerHTML='<div class="legend"><span><i style="background:linear-gradient(90deg,#0A84FF,#9B6BFF)"></i>In-scope questions answered</span><span><i style="background:#FF9F0A"></i>Adjacent questions answered (v2: lower is better; v3: only with direct evidence)</span><span><i style="background:#3A3A3C;height:4px;vertical-align:3px"></i>95% interval</span></div>'+
           D.map(function(d){ return '<div class="rrow"><div class="rn">'+d.n+'<small>'+d.s+'</small></div><div>'+bar(d.i[0],d.i[1],d.i[2],'blue')+bar(d.a[0],d.a[1],d.a[2],'orange')+'</div></div>'; }).join('')+
-          '<p class="rnote">A higher answer rate isn\'t automatically better. The similarity cutoff answered the most, but it answered diabetes-adjacent questions nearly half the time and produced many unsupported answers.</p>';
+          '<p class="rnote">A higher answer rate isn\'t automatically better. The similarity cutoff answered adjacent questions on topical similarity alone and produced many unsupported answers. v3 answers a similar share, but only where the evidence audit finds the exact claim, and its answers are more often fully supported.</p>';
       } else if(i===1){
         v.innerHTML='<div class="legend"><span><i style="background:#30D158"></i>Supported</span><span><i style="background:#FFD60A"></i>Partially supported</span><span><i style="background:#FF453A"></i>Unsupported</span><span><i style="background:repeating-linear-gradient(45deg,#48484A 0 4px,#2C2C2E 4px 8px)"></i>Partial or unsupported, not recorded separately</span></div>'+
           F.map(function(f){ var tot=f.v[0]+f.v[1]+f.v[2]+(f.x||0); function seg(c,n,cls){ return n?'<div class="sg '+cls+'" data-w="'+(100*n/tot)+'" title="'+n+'">'+n+'</div>':''; }
             return '<div class="rrow"><div class="rn">'+f.n+'<small>'+f.s+'</small></div><div class="stk">'+seg(0,f.v[0],'g')+seg(0,f.v[1],'y')+seg(0,f.v[2],'r')+seg(0,f.x||0,'h')+'</div></div>'; }).join('')+
-          '<p class="rnote">Each answer sentence was checked against the passages it cites by a separate grader model. The extra answers from the revised prompts are mostly the partial-evidence kind, and that is where the unsupported answers come from.</p>';
+          '<p class="rnote">Each answer sentence was checked against the passages it cites by a separate grader model. Partial-evidence answers are where the unsupported ones come from, which is what the v3 checks target. *Partial answers graded with a partial-answer rubric; 17 of these 24 grades done by hand after the API credit ran out.</p>';
       } else {
         v.innerHTML='<div class="mis"><div><b class="cnt2" data-to="7">0</b><span>in-scope questions misrouted as adjacent</span><small>Two-stage, original prompts, 43 development questions</small></div><div class="arr2">→</div><div><b class="cnt2" data-to="1">0</b><span>misroute after the revised rules</span><small>Same 43 development questions</small></div><div class="arr2">→</div><div><b class="cnt2" data-to="1">0</b><span>misroute on 16 new questions</span><small>All 5 adjacent and 3 unrelated routed correctly</small></div></div>'+
           '<div class="cost"><div><b>1.1 s</b><span>scope check</span></div><div><b>3.6 s</b><span>evidence audit</span></div><div><b>10 s faster</b><span>generation (26.0 s vs 36.6 s), from fewer, better passages</span></div></div>'+
-          '<p class="rnote">Timings from the original two-stage run. The checks cost about 4.7 seconds, but generation got faster because the model receives fewer, better-chosen passages.</p>';
+          '<p class="rnote">Timings from the original two-stage run. The checks cost about 4.7 seconds, but generation got faster because the model receives fewer, better-chosen passages. v3 removed the scope check; a full v3 answer takes about 31–34 seconds, two-thirds of it writing.</p>';
       }
       requestAnimationFrame(function(){ requestAnimationFrame(function(){
         v.querySelectorAll('.fl,.sg').forEach(function(e){ e.style.width=e.dataset.w+'%'; });
